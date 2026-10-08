@@ -1,6 +1,6 @@
 # MovieTracker
 
-A personal TV show and movie tracker that runs on your own computer, inspired by the late TV Time.
+A personal TV show and movie tracker that runs on your own computer, inspired by TV Time shutting down.
 
 ## Why I built this
 
