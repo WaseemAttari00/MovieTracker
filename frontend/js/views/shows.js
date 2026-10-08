@@ -1,6 +1,6 @@
 // "My shows" library grid.
 import { api } from "../api.js";
-import { emptyHtml, esc, fmtDate, posterHtml, relSoon, SHOW_STATUS_LABELS } from "../ui.js";
+import { countdownHtml, emptyHtml, esc, fmtDate, posterHtml, SHOW_STATUS_LABELS } from "../ui.js";
 
 const TABS = [...Object.entries(SHOW_STATUS_LABELS), ["all", "All"]];
 
@@ -41,14 +41,14 @@ export async function render(root, { params }) {
 
 function cardHtml(show) {
   const p = show.progress;
-  let sub;
+  let sub, countdown = "";
   if (!p.aired) {
     sub = show.first_air_date ? `Premieres ${fmtDate(show.first_air_date)}` : "Not aired yet";
   } else if (p.remaining) {
     sub = `${p.watched}/${p.aired} watched · ${p.remaining} left`;
-  } else if (show.upcoming) {
-    const date = show.upcoming.air_date;
-    sub = `Up to date · next ${relSoon(date) || fmtDate(date)}`;
+  } else if (show.coming) {
+    sub = show.coming.date ? "Up to date" : `Up to date · Season ${show.coming.season} announced`;
+    countdown = countdownHtml(show.coming);
   } else {
     sub = show.user_status === "completed" ? "Completed" : `Up to date · ${p.watched}/${p.aired}`;
   }
@@ -58,6 +58,7 @@ function cardHtml(show) {
       ${posterHtml(show.poster_path, show.name, { badge })}
       <div class="pc-title">${esc(show.name)}</div>
       <div class="pc-sub">${sub}</div>
+      ${countdown}
       ${p.aired ? `<div class="progress"><span style="width:${p.percent}%"></span></div>` : ""}
     </a>`;
 }

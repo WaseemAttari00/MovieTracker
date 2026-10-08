@@ -156,6 +156,10 @@ code { background: var(--surface-3); padding: 2px 6px; border-radius: 4px; font-
 .poster-ph { width: 100%; height: 100%; display: grid; place-items: center; padding: 12px; text-align: center; font-weight: 600; font-size: 14px; color: var(--faint); }
 .pc-title { font-weight: 600; font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pc-sub { font-size: 12px; color: var(--muted); }
+.countdown { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--accent); }
+.countdown svg { flex-shrink: 0; }
+.caught-up-box { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.caught-up-box .countdown { font-size: 13px; }
 
 /* ---------- home ---------- */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 36px; }

@@ -1,4 +1,6 @@
 // Shared formatting and rendering helpers.
+import { icon } from "./icons.js";
+
 const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ESCAPES[c]);
 
@@ -62,6 +64,17 @@ export function relDay(iso) {
 export function relSoon(iso) {
   const n = daysFromToday(iso);
   return n > -14 && n < 60 ? relDay(iso).toLowerCase() : "";
+}
+
+// Countdown to a show's next confirmed air date, e.g. "4 days remaining for S04E03".
+// `coming` is the API's {date, season, episode}; returns "" when there's no date to count down to.
+export function countdownHtml(coming) {
+  if (!coming?.date) return "";
+  const days = daysFromToday(coming.date);
+  if (days < 0) return "";
+  const what = coming.episode ? epCode(coming.season, coming.episode) : `Season ${coming.season}`;
+  const text = days === 0 ? `${what} airs today` : `${plural(days, "day")} remaining for ${what}`;
+  return `<div class="countdown">${icon("clock", 13)}<span>${text}</span></div>`;
 }
 
 export function timeAgo(timestamp) {

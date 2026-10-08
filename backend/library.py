@@ -312,24 +312,27 @@ def _progress_numbers(p):
     return {k: p[k] for k in ("total", "aired", "watched", "remaining", "percent")}
 
 
-def _summary(show, p):
+def _summary(show, p, coming):
     return {
         **{k: show[k] for k in ("id", "name", "poster_path", "backdrop_path", "first_air_date", "status",
                                  "user_status", "added_at", "last_watched_at")},
         "progress": _progress_numbers(p),
         "next": p["next"],
         "upcoming": p["upcoming"],
+        "coming": coming,
     }
 
 
 def list_shows(conn):
     today = today_iso()
-    episodes, watches = _episodes(conn), _watches(conn)
+    episodes, watches, seasons = _episodes(conn), _watches(conn), _seasons(conn)
     out = []
     for row in conn.execute("SELECT * FROM shows"):
         show = dict(row)
-        p = compute_progress(show, episodes.get(show["id"], []), watches.get(show["id"], {}), today)
-        out.append(_summary(show, p))
+        show_eps = episodes.get(show["id"], [])
+        p = compute_progress(show, show_eps, watches.get(show["id"], {}), today)
+        coming = _coming_for_show(show, p, seasons.get(show["id"], []), show_eps, today)
+        out.append(_summary(show, p, coming))
     return out
 
 
@@ -362,6 +365,7 @@ def _detail(show, seasons, episodes, watched, in_library):
         "progress": _progress_numbers(p),
         "next": p["next"],
         "upcoming": p["upcoming"],
+        "coming": _coming_for_show(show, p, seasons, episodes, today),
     }
 
 
@@ -521,12 +525,11 @@ def dashboard(conn):
         show = dict(row)
         show_eps = episodes.get(show["id"], [])
         p = compute_progress(show, show_eps, watches.get(show["id"], {}), today)
+        item = _coming_for_show(show, p, seasons.get(show["id"], []), show_eps, today)
         if show["user_status"] == "watching" and p["next"]:
-            continue_watching.append(_summary(show, p))
-        if show["user_status"] != "dropped":
-            item = _coming_for_show(show, p, seasons.get(show["id"], []), show_eps, today)
-            if item:
-                coming.append(item)
+            continue_watching.append(_summary(show, p, item))
+        if show["user_status"] != "dropped" and item:
+            coming.append(item)
     for movie in conn.execute("SELECT * FROM movies WHERE user_status = 'watchlist' AND release_date >= ?", (today,)):
         coming.append({"type": "movie", "id": movie["id"], "title": movie["title"], "poster_path": movie["poster_path"],
                        "date": movie["release_date"], "season": None, "episode": None, "episode_name": None, "premiere": False})

@@ -2,7 +2,8 @@
 import { api } from "../api.js";
 import { icon } from "../icons.js";
 import {
-  airStatusBadge, epCode, esc, fmtDate, pad, plural, posterHtml, relSoon, SHOW_STATUS_LABELS, tmdbImg, toast, year,
+  airStatusBadge, countdownHtml, epCode, esc, fmtDate, pad, plural, posterHtml, relSoon, SHOW_STATUS_LABELS, tmdbImg,
+  toast, year,
 } from "../ui.js";
 
 export async function render(root, { id }) {
@@ -145,7 +146,7 @@ function actionsHtml({ in_library, show }) {
     <button class="btn btn-ghost btn-danger" data-action="remove">${icon("trash", 16)} Remove</button>`;
 }
 
-function progressHtml({ progress: p, next, upcoming, show }) {
+function progressHtml({ progress: p, next, upcoming, coming, show }) {
   if (!p.total) return "";
   let summary;
   if (p.aired) {
@@ -173,7 +174,11 @@ function progressHtml({ progress: p, next, upcoming, show }) {
         </div>
       </div>`;
   } else if (p.aired && !p.remaining && p.watched) {
-    right = `<div class="caught-up">${icon("check", 18)} You're up to date</div>`;
+    right = `
+      <div class="caught-up-box">
+        <div class="caught-up">${icon("check", 18)} You're up to date</div>
+        ${countdownHtml(coming)}
+      </div>`;
   }
 
   return `
