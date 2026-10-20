@@ -1,4 +1,5 @@
 // Shared formatting and rendering helpers.
+import { api } from "./api.js";
 import { icon } from "./icons.js";
 
 const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
@@ -12,7 +13,11 @@ export const SHOW_STATUS_LABELS = {
   dropped: "Dropped",
 };
 
-export const tmdbImg = (path, size = "w342") => (path ? `https://image.tmdb.org/t/p/${size}${path}` : "");
+export const MOVIE_STATUS_LABELS = { watched: "Watched", watchlist: "Watchlist" };
+
+export const statusLabel = (type, status) => (type === "show" ? SHOW_STATUS_LABELS : MOVIE_STATUS_LABELS)[status];
+
+export const tmdbImg =(path, size = "w342") => (path ? `https://image.tmdb.org/t/p/${size}${path}` : "");
 
 export function posterHtml(path, title, { size = "w342", badge = "" } = {}) {
   const inner = path
@@ -113,7 +118,48 @@ export function airStatusBadge(status) {
   return `<span class="badge ${cls}">${esc(label)}</span>`;
 }
 
-export const loadingHtml = () => `<div class="loading"><div class="spinner"></div></div>`;
+// Card for a show or movie from TMDB (search results, recommendations) with quick "add" buttons.
+// item: {type: "show"|"movie", id, title, date, poster_path, overview, user_status, vote_average?}
+export function mediaCardHtml(item, { extra = "", dismissible = false } = {}) {
+  const href = item.type === "show" ? `#/show/${item.id}` : `#/movie/${item.id}`;
+  const data = `data-type="${item.type}" data-id="${item.id}"`;
+  let actions;
+  if (item.user_status) {
+    actions = `<span class="badge badge-success">${icon("check", 12)} ${statusLabel(item.type, item.user_status)}</span>`;
+  } else if (item.type === "show") {
+    actions = `
+      <button class="btn btn-sm btn-primary" data-action="add" ${data} data-status="watching">${icon("plus", 15)} Watching</button>
+      <button class="btn btn-sm" data-action="add" ${data} data-status="watchlist">${icon("bookmark", 15)} Watchlist</button>`;
+  } else {
+    actions = `
+      <button class="btn btn-sm btn-primary" data-action="add" ${data} data-status="watched">${icon("check", 15)} Watched</button>
+      <button class="btn btn-sm" data-action="add" ${data} data-status="watchlist">${icon("bookmark", 15)} Watchlist</button>`;
+  }
+  if (dismissible && !item.user_status) {
+    actions += `<button class="btn btn-sm btn-ghost" data-action="dismiss" ${data} title="Don't recommend this again">${icon("x", 15)} Not interested</button>`;
+  }
+  const rating = item.vote_average ? `<span class="faint small">${icon("star", 12, "filled")} ${item.vote_average.toFixed(1)}</span>` : "";
+  return `
+    <article class="result">
+      <a href="${href}">${posterHtml(item.poster_path, item.title, { size: "w185" })}</a>
+      <div class="result-body">
+        <a class="result-title" href="${href}">${esc(item.title)} <span class="muted">${year(item.date)}</span></a>
+        <div class="result-meta"><span class="badge">${item.type === "show" ? "TV" : "Movie"}</span>${rating}</div>
+        ${extra}
+        <p class="result-overview">${esc(item.overview || "")}</p>
+        <div class="result-actions">${actions}</div>
+      </div>
+    </article>`;
+}
+
+// Add a show/movie from a media card to the library.
+export async function addToLibrary(item, status) {
+  await api.post(`/${item.type === "show" ? "shows" : "movies"}/${item.id}`, { user_status: status });
+  item.user_status = status;
+  toast(`Added “${item.title}” to ${statusLabel(item.type, status)}`);
+}
+
+export const loadingHtml =() => `<div class="loading"><div class="spinner"></div></div>`;
 
 export const emptyHtml = (title, text, extra = "") =>
   `<div class="empty"><h3>${esc(title)}</h3><p>${esc(text)}</p>${extra}</div>`;

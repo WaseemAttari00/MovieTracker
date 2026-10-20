@@ -8,6 +8,7 @@ import * as show from "./views/show.js";
 import * as movies from "./views/movies.js";
 import * as movie from "./views/movie.js";
 import * as search from "./views/search.js";
+import * as forYou from "./views/foryou.js";
 import * as settings from "./views/settings.js";
 
 const ROUTES = [
@@ -17,6 +18,7 @@ const ROUTES = [
   [/^\/movies$/, movies],
   [/^\/movie\/(\d+)$/, movie],
   [/^\/search$/, search],
+  [/^\/for-you$/, forYou],
   [/^\/settings$/, settings],
 ];
 
@@ -24,6 +26,7 @@ const NAV = [
   ["#/", "home", "Home", (path) => path === "/"],
   ["#/shows", "tv", "Shows", (path) => /^\/shows?(\/|$)/.test(path)],
   ["#/movies", "film", "Movies", (path) => /^\/movies?(\/|$)/.test(path)],
+  ["#/for-you", "compass", "For you", (path) => path === "/for-you"],
   ["#/settings", "sliders", "Settings", (path) => path === "/settings"],
 ];
 

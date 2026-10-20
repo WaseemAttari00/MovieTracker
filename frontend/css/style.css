@@ -220,6 +220,17 @@ code { background: var(--surface-3); padding: 2px 6px; border-radius: 4px; font-
 .result-overview { font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .result-actions { margin-top: auto; display: flex; flex-wrap: wrap; gap: 8px; }
 .more { display: flex; justify-content: center; margin-top: 24px; }
+.result-meta { display: flex; align-items: center; gap: 10px; }
+.result-meta .small { display: inline-flex; align-items: center; gap: 3px; }
+
+/* ---------- for you ---------- */
+.page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.page-head .page-title { margin-bottom: 4px; }
+.building { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
+.building .spinner { width: 12px; height: 12px; }
+.because { font-size: 13px; color: var(--muted); }
+.because b { color: var(--text); font-weight: 600; }
+.center { text-align: center; }
 
 /* ---------- show / movie pages ---------- */
 .hero { position: relative; margin: -28px -32px 28px; padding: 40px 32px 32px; overflow: hidden; }

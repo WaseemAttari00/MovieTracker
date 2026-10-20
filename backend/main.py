@@ -265,6 +265,32 @@ def delete_movie(movie_id: int):
     return {"ok": True}
 
 
+# --- recommendations -------------------------------------------------------------------
+
+class DismissRecommendationIn(BaseModel):
+    type: Literal["show", "movie"]
+    id: int
+    dismissed: bool = True  # False = undo
+
+
+@app.get("/api/recommendations")
+def get_recommendations():
+    with connect() as conn:
+        return library.recommendations(conn)
+
+
+@app.post("/api/recommendations/refresh")
+async def refresh_recommendations():
+    return await library.build_recommendations(tmdb_key())
+
+
+@app.post("/api/recommendations/dismiss")
+def dismiss_recommendation(body: DismissRecommendationIn):
+    with connect() as conn:
+        library.dismiss_recommendation(conn, body.type, body.id, body.dismissed)
+    return {"ok": True}
+
+
 # --- backup ----------------------------------------------------------------------------
 
 @app.get("/api/export")

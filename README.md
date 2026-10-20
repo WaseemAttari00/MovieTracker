@@ -19,6 +19,8 @@ If you're in the same situation, feel free to use it too. Setup takes a few minu
   newly announced seasons, premiere dates and shows that ended or got canceled.
 - **Coming soon**: upcoming episodes, season premieres and watchlist movie releases, sorted by date.
 - **Movies**: a watched list (with date and a 1–5 star rating) and a watchlist.
+- **For you**: show and movie recommendations based on what you've watched and how you rated it,
+  with "because you watched…" for each one and a "Not interested" button.
 - **Your data stays with you**: everything is stored in one SQLite file on your computer, with a
   daily automatic backup and JSON export/import.
 

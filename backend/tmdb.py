@@ -70,6 +70,10 @@ class TMDB:
     async def movie(self, movie_id):
         return await self._get(f"/movie/{movie_id}")
 
+    async def recommendations(self, kind, tmdb_id):
+        """TMDB's "people who liked this also liked" list for a show ("show") or movie ("movie")."""
+        return await self._get(f"/{'tv' if kind == 'show' else 'movie'}/{tmdb_id}/recommendations")
+
     async def show(self, show_id):
         """Show details plus every season (with its episodes) under "season_details"."""
         data = await self._get(f"/tv/{show_id}")

@@ -101,6 +101,27 @@ CREATE TABLE IF NOT EXISTS updates (
     dismissed  INTEGER NOT NULL DEFAULT 0,
     UNIQUE (show_id, kind, ref)
 );
+
+-- "For you": cached suggestions built from TMDB recommendations for titles in your library.
+CREATE TABLE IF NOT EXISTS recommendations (
+    type         TEXT NOT NULL,                    -- show | movie
+    id           INTEGER NOT NULL,                 -- TMDB id
+    title        TEXT NOT NULL,
+    date         TEXT,
+    poster_path  TEXT,
+    overview     TEXT,
+    vote_average REAL,
+    score        REAL NOT NULL,
+    because      TEXT NOT NULL,                    -- JSON list of library titles that led to it
+    PRIMARY KEY (type, id)
+);
+
+CREATE TABLE IF NOT EXISTS dismissed_recommendations (
+    type         TEXT NOT NULL,
+    id           INTEGER NOT NULL,
+    dismissed_at TEXT NOT NULL,
+    PRIMARY KEY (type, id)
+);
 """
 
 

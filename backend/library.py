@@ -1,5 +1,6 @@
 """Library logic: storing TMDB data, watch progress, "what's new" updates and the dashboard."""
 import asyncio
+import json
 import logging
 from datetime import date, datetime, timedelta
 
@@ -632,6 +633,165 @@ async def sync_library(api_key, force=False):
             log.warning("Refresh failed: %r", failure)
         result["errors"] = sorted({str(f) for f in failures})
         return result
+
+
+# --- recommendations ------------------------------------------------------------------
+#
+# Every title in the library gets a weight for how much it says about your taste (finished shows,
+# lots of episodes, high ratings and recent watches count more; dropped shows and 1-2 star movies
+# don't count). TMDB's recommendations for the strongest ones are merged, so titles suggested by
+# several of your favourites rise to the top.
+
+MAX_SEEDS = 25        # library titles asked for recommendations (one TMDB request each)
+RECS_TO_KEEP = 60
+RECS_MAX_AGE = timedelta(days=7)
+MIN_VOTES = 20        # skip obscure titles with too few TMDB votes to judge
+
+
+def _recent(timestamp, days):
+    if not timestamp:
+        return False
+    try:
+        return datetime.now() - datetime.fromisoformat(timestamp) < timedelta(days=days)
+    except ValueError:
+        return False
+
+
+def _seeds(conn):
+    """(type, id, title, weight) for the library titles that best describe your taste."""
+    seeds = []
+    episode_counts = {r["show_id"]: r["n"] for r in conn.execute(
+        "SELECT show_id, COUNT(*) AS n FROM watches WHERE season_number > 0 GROUP BY show_id")}
+    status_weight = {"completed": 3, "watching": 2, "paused": 1, "watchlist": 0.5}
+    for show in conn.execute("SELECT id, name, user_status, last_watched_at FROM shows"):
+        if show["user_status"] not in status_weight:  # dropped
+            continue
+        weight = status_weight[show["user_status"]] + min(episode_counts.get(show["id"], 0), 20) / 10
+        if _recent(show["last_watched_at"], 60):
+            weight += 1
+        seeds.append(("show", show["id"], show["name"], weight))
+
+    rating_weight = {5: 3, 4: 2, 3: 1, None: 1.5}
+    for movie in conn.execute("SELECT id, title, user_status, rating, watched_at FROM movies"):
+        if movie["user_status"] == "watchlist":
+            weight = 0.5
+        elif movie["rating"] in rating_weight:
+            weight = rating_weight[movie["rating"]] + (0.5 if _recent(movie["watched_at"], 90) else 0)
+        else:  # rated 1-2 stars
+            continue
+        seeds.append(("movie", movie["id"], movie["title"], weight))
+
+    seeds.sort(key=lambda s: s[3], reverse=True)
+    return seeds[:MAX_SEEDS]
+
+
+def _signature(seeds):
+    return ",".join(sorted(f"{kind}:{tmdb_id}" for kind, tmdb_id, _, _ in seeds))
+
+
+def _setting(conn, key):
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def _put_setting(conn, key, value):
+    conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                 (key, value))
+
+
+def _hidden_from_recommendations(conn):
+    """Titles already in the library or marked "not interested"."""
+    return ({("show", r["id"]) for r in conn.execute("SELECT id FROM shows")}
+            | {("movie", r["id"]) for r in conn.execute("SELECT id FROM movies")}
+            | {(r["type"], r["id"]) for r in conn.execute("SELECT type, id FROM dismissed_recommendations")})
+
+
+def recommendations(conn):
+    """Cached recommendations, plus whether they should be rebuilt (old, or your library changed)."""
+    seeds = _seeds(conn)
+    built_at = _setting(conn, "recs_built_at")
+    hidden = _hidden_from_recommendations(conn)
+    items = [{**dict(r), "because": json.loads(r["because"])}
+             for r in conn.execute("SELECT * FROM recommendations ORDER BY score DESC")
+             if (r["type"], r["id"]) not in hidden]
+    stale = bool(seeds) and (
+        not built_at
+        or _stale(built_at, RECS_MAX_AGE, datetime.now())
+        or _setting(conn, "recs_seeds") != _signature(seeds)
+    )
+    return {"items": items, "built_at": built_at, "stale": stale, "has_seeds": bool(seeds)}
+
+
+_recs_lock = asyncio.Lock()
+
+
+async def build_recommendations(api_key):
+    async with _recs_lock:
+        with connect() as conn:
+            seeds = _seeds(conn)
+        if not seeds:
+            with connect() as conn:
+                return recommendations(conn)
+
+        sem = asyncio.Semaphore(CONCURRENCY)
+        async with TMDB(api_key) as tmdb:
+            async def fetch(seed):
+                async with sem:
+                    return seed, await tmdb.recommendations(seed[0], seed[1])
+
+            outcomes = await asyncio.gather(*map(fetch, seeds), return_exceptions=True)
+
+        failures = [o for o in outcomes if isinstance(o, Exception)]
+        if len(failures) == len(outcomes):
+            raise failures[0]  # e.g. offline or bad key: keep the old recommendations
+        for failure in failures:
+            log.warning("Recommendations failed: %r", failure)
+
+        scores, reasons, info = {}, {}, {}
+        for (kind, _, title, weight), data in (o for o in outcomes if not isinstance(o, Exception)):
+            for rank, item in enumerate(data.get("results") or []):
+                if item.get("adult") or (item.get("vote_count") or 0) < MIN_VOTES:
+                    continue
+                key = (kind, item["id"])
+                points = weight * (1 - rank / 40)  # TMDB's top suggestions count a bit more
+                scores[key] = scores.get(key, 0) + points
+                reasons.setdefault(key, []).append((points, title))
+                info[key] = item
+
+        def final_score(key):
+            return scores[key] * (0.6 + (info[key].get("vote_average") or 0) / 25)  # nudge well-rated titles up
+
+        with connect() as conn:
+            hidden = _hidden_from_recommendations(conn)
+            ranked = sorted((k for k in scores if k not in hidden), key=final_score, reverse=True)[:RECS_TO_KEEP]
+            rows = []
+            for key in ranked:
+                item = info[key]
+                because = list(dict.fromkeys(title for _, title in sorted(reasons[key], reverse=True)))[:3]
+                rows.append((
+                    key[0], key[1],
+                    item.get("name") or item.get("title") or item.get("original_name") or item.get("original_title") or "Untitled",
+                    item.get("first_air_date") or item.get("release_date") or None,
+                    item.get("poster_path"), item.get("overview"), item.get("vote_average"),
+                    round(final_score(key), 3), json.dumps(because),
+                ))
+            conn.execute("DELETE FROM recommendations")
+            conn.executemany(
+                "INSERT INTO recommendations (type, id, title, date, poster_path, overview, vote_average, score, because) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+            _put_setting(conn, "recs_built_at", now_iso())
+            _put_setting(conn, "recs_seeds", _signature(seeds))
+            return recommendations(conn)
+
+
+def dismiss_recommendation(conn, kind, tmdb_id, dismissed=True):
+    if dismissed:
+        conn.execute("INSERT OR REPLACE INTO dismissed_recommendations (type, id, dismissed_at) VALUES (?, ?, ?)",
+                     (kind, tmdb_id, now_iso()))
+    else:
+        conn.execute("DELETE FROM dismissed_recommendations WHERE type = ? AND id = ?", (kind, tmdb_id))
 
 
 # --- backup ---------------------------------------------------------------------------
